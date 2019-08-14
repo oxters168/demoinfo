@@ -253,11 +253,16 @@ namespace DemoInfo
 			get { return Header.MapName; }
 		}
 
-		/// <summary>
-		/// The header of the demo, containing some useful information. 
-		/// </summary>
-		/// <value>The header.</value>
-		public DemoHeader Header { get; private set; }
+        /// <summary>
+        /// Stores the position of the ticks within the stream
+        /// </summary>
+        private long[] tickStreamPositions;
+
+        /// <summary>
+        /// The header of the demo, containing some useful information. 
+        /// </summary>
+        /// <value>The header.</value>
+        public DemoHeader Header { get; private set; }
 
 		/// <summary>
 		/// Gets the participants of this game
@@ -499,7 +504,8 @@ namespace DemoInfo
 		/// <param name="input">An input-stream.</param>
 		public DemoParser(Stream input)
 		{
-			BitStream = BitStreamUtil.Create(input);
+            //BitStream = BitStreamUtil.Create(input);
+            BitStream = new BitStreamImpl.BitStreamFromStream(input);
 
 			for (int i = 0; i < MAXPLAYERS; i++) {
 				additionalInformations [i] = new AdditionalPlayerInformation ();
@@ -524,6 +530,7 @@ namespace DemoInfo
 			if (header.Protocol != 4)
 				throw new InvalidDataException("Invalid Demo-Protocol");
 
+            tickStreamPositions = new long[header.PlaybackTicks];
 			Header = header;
 
 
@@ -551,6 +558,19 @@ namespace DemoInfo
 				if (token.IsCancellationRequested) return;
 			}
 		}
+
+        /// <summary>
+        /// Goes to the given tick. The header should be parsed and all ticks should be parsed beforehand.
+        /// </summary>
+        /// <param name="tickIndex">The tick index</param>
+        public void GotoTick(int tickIndex)
+        {
+            if (BitStream is BitStreamImpl.BitStreamFromStream)
+            {
+                CurrentTick = tickIndex;
+                ((BitStreamImpl.BitStreamFromStream)BitStream).Position = tickStreamPositions[tickIndex];
+            }
+        }
 
 		/// <summary>
 		/// Parses the next tick of the demo.
@@ -616,12 +636,18 @@ namespace DemoInfo
 		/// <returns><c>true</c>, if tick was parsed, <c>false</c> otherwise.</returns>
 		private bool ParseTick()
 		{
-			DemoCommand command = (DemoCommand)BitStream.ReadByte();
+            long streamPosition = 0;
+            if (BitStream is BitStreamImpl.BitStreamFromStream)
+                streamPosition = ((BitStreamImpl.BitStreamFromStream)BitStream).Position;
+
+            DemoCommand command = (DemoCommand)BitStream.ReadByte();
 
 			IngameTick = (int)BitStream.ReadInt(32); // tick number
 			BitStream.ReadByte(); // player slot
 
-			this.CurrentTick++; // = TickNum;
+            tickStreamPositions[CurrentTick] = streamPosition;
+
+            this.CurrentTick++; // = TickNum;
 
 			switch (command) {
 			case DemoCommand.Synctick:
