@@ -69,6 +69,8 @@
     <Reference Include="System" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="BitStream\BitStreamFromStream.cs" />
+    <Compile Include="BitStream\DataParser.cs" />
     <Compile Include="DemoParser.cs" />
     <Compile Include="DP\DemoPacketParser.cs" />
     <Compile Include="DP\Entity.cs" />
