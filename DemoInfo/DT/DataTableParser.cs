@@ -60,7 +60,8 @@ namespace DemoInfo.DT
 
                 entry.DataTableID = DataTables.FindIndex(a => a.Name == entry.DTName);
 
-                ServerClasses.Add(entry);
+                if (ServerClasses.FirstOrDefault(sc => sc.Name == entry.Name && sc.DTName == entry.DTName) == null)
+                    ServerClasses.Add(entry);
             }
 
             for (int i = 0; i < serverClassCount; i++)
@@ -149,6 +150,7 @@ namespace DemoInfo.DT
 
             List<FlattenedPropEntry> flattenedProps = ServerClasses[serverClassIndex].FlattenedProps;
 
+            tmpFlattenedProps.RemoveAll(prop => flattenedProps.FirstOrDefault(ep => ep.PropertyName == prop.PropertyName) != null);
             flattenedProps.AddRange(tmpFlattenedProps);
         }
 

@@ -1002,7 +1002,7 @@ namespace DemoInfo
 			for (int i = 0; i < SendTableParser.ServerClasses.Count; i++) {
 				var sc = SendTableParser.ServerClasses[i];
 
-				if (sc.BaseClasses.Count > 6 && sc.BaseClasses [6].Name == "CWeaponCSBase") { 
+				if (sc.BaseClasses.Count > 6 && sc.BaseClasses [6].Name == "CWeaponCSBase" && !equipmentMapping.ContainsKey(sc)) { 
 					//It is a "weapon" (Gun, C4, ... (...is the cz still a "weapon" after the nerf? (fml, it was buffed again)))
 					if (sc.BaseClasses.Count > 7) {
 						if (sc.BaseClasses [7].Name == "CWeaponCSBaseGun") {
