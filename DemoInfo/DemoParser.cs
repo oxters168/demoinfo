@@ -289,6 +289,10 @@ namespace DemoInfo
 		/// </summary>
 		private readonly IBitStream BitStream;
 
+        /// <summary>
+        /// The data copied from the original stream used in the bitstream
+        /// </summary>
+        private readonly MemoryStream cachedData;
 
 
 		/// <summary>
@@ -505,7 +509,10 @@ namespace DemoInfo
 		public DemoParser(Stream input)
 		{
             //BitStream = BitStreamUtil.Create(input);
-            BitStream = new BitStreamImpl.BitStreamFromStream(input);
+            cachedData = new MemoryStream();
+            input.CopyTo(cachedData);
+            cachedData.Position = 0;
+            BitStream = new BitStreamImpl.BitStreamFromStream(cachedData);
 
 			for (int i = 0; i < MAXPLAYERS; i++) {
 				additionalInformations [i] = new AdditionalPlayerInformation ();
@@ -538,22 +545,28 @@ namespace DemoInfo
 				HeaderParsed(this, new HeaderParsedEventArgs(Header));
 		}
 
-		/// <summary>
-		/// Parses this file until the end of the demo is reached. 
-		/// Useful if you have subscribed to events
-		/// </summary>
-		public void ParseToEnd()
+        /// <summary>
+        /// Parses this file until the end of the demo is reached. 
+        /// Useful if you have subscribed to events
+        /// </summary>
+        /// <param name="parseDataTables">If false, won't parse the data tables</param>
+        /// <param name="parseStringTables">If false, won't parse the string tables</param>
+        /// <param name="parseDemoPackets">If false, won't parse the main part of the demo</param>
+        public void ParseToEnd(bool parseDataTables = true, bool parseStringTables = true, bool parseDemoPackets = true)
 		{
-			ParseToEnd(CancellationToken.None);
+			ParseToEnd(CancellationToken.None, parseDataTables, parseStringTables, parseDemoPackets);
 		}
 
-		/// <summary>
-		/// Same as ParseToEnd() but accepts a CancellationToken to be able to cancel parsing
-		/// </summary>
-		/// <param name="token"></param>
-		public void ParseToEnd(CancellationToken token)
+        /// <summary>
+        /// Same as ParseToEnd() but accepts a CancellationToken to be able to cancel parsing
+        /// </summary>
+        /// <param name="token"></param>
+        /// <param name="parseDataTables">If false, won't parse the data tables</param>
+        /// <param name="parseStringTables">If false, won't parse the string tables</param>
+        /// <param name="parseDemoPackets">If false, won't parse the main part of the demo</param>
+        public void ParseToEnd(CancellationToken token, bool parseDataTables = true, bool parseStringTables = true, bool parseDemoPackets = true)
 		{
-			while (ParseNextTick())
+			while (ParseNextTick(parseDataTables, parseStringTables, parseDemoPackets))
 			{
 				if (token.IsCancellationRequested) return;
 			}
@@ -572,16 +585,19 @@ namespace DemoInfo
             }
         }
 
-		/// <summary>
-		/// Parses the next tick of the demo.
-		/// </summary>
-		/// <returns><c>true</c>, if this wasn't the last tick, <c>false</c> otherwise.</returns>
-		public bool ParseNextTick()
+        /// <summary>
+        /// Parses the next tick of the demo.
+        /// </summary>
+        /// <param name="parseDataTables">If false, won't parse the data tables</param>
+        /// <param name="parseStringTables">If false, won't parse the string tables</param>
+        /// <param name="parseDemoPackets">If false, won't parse the main part of the demo</param>
+        /// <returns><c>true</c>, if this wasn't the last tick, <c>false</c> otherwise.</returns>
+        public bool ParseNextTick(bool parseDataTables = true, bool parseStringTables = true, bool parseDemoPackets = true)
 		{
 			if (Header == null)
 				throw new InvalidOperationException ("You need to call ParseHeader first before you call ParseToEnd or ParseNextTick!");
 
-			bool b = ParseTick();
+			bool b = ParseTick(parseDataTables, parseStringTables, parseDemoPackets);
 			
 			for (int i = 0; i < RawPlayers.Length; i++) {
 				if (RawPlayers[i] == null)
@@ -630,11 +646,14 @@ namespace DemoInfo
 			return b;
 		}
 
-		/// <summary>
-		/// Parses the tick internally
-		/// </summary>
-		/// <returns><c>true</c>, if tick was parsed, <c>false</c> otherwise.</returns>
-		private bool ParseTick()
+        /// <summary>
+        /// Parses the tick internally
+        /// </summary>
+        /// <param name="parseDataTables">If false, won't parse the data tables</param>
+        /// <param name="parseStringTables">If false, won't parse the string tables</param>
+        /// <param name="parseDemoPackets">If false, won't parse the main part of the demo</param>
+        /// <returns><c>true</c>, if tick was parsed, <c>false</c> otherwise.</returns>
+        private bool ParseTick(bool parseDataTables = true, bool parseStringTables = true, bool parseDemoPackets = true)
 		{
             long streamPosition = 0;
             if (BitStream is BitStreamImpl.BitStreamFromStream)
@@ -650,51 +669,55 @@ namespace DemoInfo
             this.CurrentTick++; // = TickNum;
 
 			switch (command) {
-			case DemoCommand.Synctick:
-				break;
-			case DemoCommand.Stop:
-				return false;
-			case DemoCommand.ConsoleCommand:
-				BitStream.BeginChunk(BitStream.ReadSignedInt(32) * 8);
-				BitStream.EndChunk();
-				break;
-			case DemoCommand.DataTables:
-				BitStream.BeginChunk (BitStream.ReadSignedInt (32) * 8);
-				SendTableParser.ParsePacket (BitStream);
-				BitStream.EndChunk ();
+			    case DemoCommand.Synctick:
+				    break;
+			    case DemoCommand.Stop:
+				    return false;
+			    case DemoCommand.ConsoleCommand:
+				    BitStream.BeginChunk(BitStream.ReadSignedInt(32) * 8);
+				    BitStream.EndChunk();
+				    break;
+			    case DemoCommand.DataTables:
+				    BitStream.BeginChunk (BitStream.ReadSignedInt (32) * 8);
+                    if (parseDataTables)
+				        SendTableParser.ParsePacket (BitStream);
+				    BitStream.EndChunk ();
 
-				//Map the weapons in the equipmentMapping-Dictionary.
-				MapEquipment ();
-
-				//And now we have the entities, we can bind events on them. 
-				BindEntites();
-
-				break;
-			case DemoCommand.StringTables:
-				BitStream.BeginChunk(BitStream.ReadSignedInt(32) * 8);
-				StringTables.ParsePacket(BitStream, this);
-				BitStream.EndChunk();
-				break;
-			case DemoCommand.UserCommand:
-				BitStream.ReadInt(32);
-				BitStream.BeginChunk(BitStream.ReadSignedInt(32) * 8);
-				BitStream.EndChunk();
-				break;
-			case DemoCommand.Signon:
-			case DemoCommand.Packet:
-				ParseDemoPacket();
-				break;
-			default:
-				throw new Exception("Can't handle Demo-Command " + command);
+                    if (parseDataTables)
+                    {
+                        //Map the weapons in the equipmentMapping-Dictionary.
+                        MapEquipment();
+                        //And now we have the entities, we can bind events on them. 
+                        BindEntites();
+                    }
+				    break;
+			    case DemoCommand.StringTables:
+				    BitStream.BeginChunk(BitStream.ReadSignedInt(32) * 8);
+                    if (parseStringTables)
+				        StringTables.ParsePacket(BitStream, this);
+				    BitStream.EndChunk();
+				    break;
+			    case DemoCommand.UserCommand:
+				    BitStream.ReadInt(32);
+				    BitStream.BeginChunk(BitStream.ReadSignedInt(32) * 8);
+				    BitStream.EndChunk();
+				    break;
+			    case DemoCommand.Signon:
+			    case DemoCommand.Packet:
+				    ParseDemoPacket(parseDemoPackets);
+				    break;
+			    default:
+				    throw new Exception("Can't handle Demo-Command " + command);
 			}
 
 			return true;
 		}
 
-		/// <summary>
-		/// Parses a DEM_Packet. 
-		/// </summary>
-		private void ParseDemoPacket()
+        /// <summary>
+        /// Parses a DEM_Packet. 
+        /// </summary>
+        /// <param name="parseTheGoodStuff">If false, won't parse the main part of the demo</param>
+        private void ParseDemoPacket(bool parseTheGoodStuff = true)
 		{
 			//Read a command-info. Contains no really useful information afaik. 
 			CommandInfo.Parse(BitStream);
@@ -702,7 +725,8 @@ namespace DemoInfo
 			BitStream.ReadInt(32); // SeqNrOut
 
 			BitStream.BeginChunk(BitStream.ReadSignedInt(32) * 8);
-			DemoPacketParser.ParsePacket(BitStream, this);
+            if (parseTheGoodStuff)
+			    DemoPacketParser.ParsePacket(BitStream, this);
 			BitStream.EndChunk();
 		}
 
@@ -1143,7 +1167,8 @@ namespace DemoInfo
 			SendTableParser.FindByName("CBaseTrigger").OnNewEntity += (s1, newResource) => {
 
 				BoundingBoxInformation trigger = new BoundingBoxInformation(newResource.Entity.ID);
-				triggers.Add(trigger);
+                if (triggers.FirstOrDefault(t => t.Index == trigger.Index) == null)
+				    triggers.Add(trigger);
 
 				newResource.Entity.FindProperty("m_Collision.m_vecMins").VectorRecived += (s2, vector) => {
 					trigger.Min = vector.Value;
@@ -1474,6 +1499,7 @@ namespace DemoInfo
 		/// collector can reclaim the memory that the <see cref="DemoInfo.DemoParser"/> was occupying.</remarks>
 		public void Dispose ()
 		{
+            cachedData.Dispose();
 			BitStream.Dispose();
 
 			foreach (var entity in Entities) {
