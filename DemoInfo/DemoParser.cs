@@ -664,6 +664,10 @@ namespace DemoInfo
 			IngameTick = (int)BitStream.ReadInt(32); // tick number
 			BitStream.ReadByte(); // player slot
 
+            if (tickStreamPositions.Length <= CurrentTick)
+                Array.Resize(ref tickStreamPositions, CurrentTick + 1);
+                //tickStreamPositions.Capacity = CurrentTick + 1;
+
             tickStreamPositions[CurrentTick] = streamPosition;
 
             this.CurrentTick++; // = TickNum;
