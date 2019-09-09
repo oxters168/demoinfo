@@ -254,9 +254,10 @@ namespace DemoInfo
 		}
 
         /// <summary>
-        /// Stores the position of the ticks within the stream
+        /// Stores the position of the beginning of the demo
         /// </summary>
-        private long[] tickStreamPositions;
+        //private long[] tickStreamPositions;
+        private long headerEndStreamPosition;
 
         /// <summary>
         /// The header of the demo, containing some useful information. 
@@ -537,11 +538,12 @@ namespace DemoInfo
 			if (header.Protocol != 4)
 				throw new InvalidDataException("Invalid Demo-Protocol");
 
-            tickStreamPositions = new long[header.PlaybackTicks];
 			Header = header;
+            //tickStreamPositions = new long[header.PlaybackTicks];
+            if (BitStream is BitStreamImpl.BitStreamFromStream)
+                headerEndStreamPosition = ((BitStreamImpl.BitStreamFromStream)BitStream).Position;
 
-
-			if (HeaderParsed != null)
+            if (HeaderParsed != null)
 				HeaderParsed(this, new HeaderParsedEventArgs(Header));
 		}
 
@@ -573,15 +575,14 @@ namespace DemoInfo
 		}
 
         /// <summary>
-        /// Goes to the given tick. The header should be parsed and all ticks should be parsed beforehand.
+        /// Goes to the start of the demo. The header should be parsed beforehand.
         /// </summary>
-        /// <param name="tickIndex">The tick index</param>
-        public void GotoTick(int tickIndex)
+        public void GotoStart()
         {
             if (BitStream is BitStreamImpl.BitStreamFromStream)
             {
-                CurrentTick = tickIndex;
-                ((BitStreamImpl.BitStreamFromStream)BitStream).Position = tickStreamPositions[tickIndex];
+                CurrentTick = 0;
+                ((BitStreamImpl.BitStreamFromStream)BitStream).Position = headerEndStreamPosition;
             }
         }
 
@@ -664,11 +665,11 @@ namespace DemoInfo
 			IngameTick = (int)BitStream.ReadInt(32); // tick number
 			BitStream.ReadByte(); // player slot
 
-            if (tickStreamPositions.Length <= CurrentTick)
-                Array.Resize(ref tickStreamPositions, CurrentTick + 1);
+            //if (tickStreamPositions.Length <= CurrentTick)
+            //    Array.Resize(ref tickStreamPositions, CurrentTick + 1);
                 //tickStreamPositions.Capacity = CurrentTick + 1;
 
-            tickStreamPositions[CurrentTick] = streamPosition;
+            //tickStreamPositions[CurrentTick] = streamPosition;
 
             this.CurrentTick++; // = TickNum;
 
